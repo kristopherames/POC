@@ -1,0 +1,198 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+	<meta charset="utf-8" />
+    <link href="Content/site.css" rel="stylesheet" />
+
+    <script src="Scripts/jquery-1.8.2.min.js"></script>
+
+    <script type="text/javascript">
+        $(document).ready(function () {
+
+            //BEGIN: Variables and constants
+            var apiBaseUrl = "https://hacker-news.firebaseio.com/v0/";
+            var selectedPageSize = 10;
+            //END: Variables and constants
+
+
+            //BEGIN: Event handlers
+            $("#ddlPageSize").change(function () {
+                executeSearch();
+            });
+            $("#txtSearch").bind("enterKey", function (e) {
+                executeSearch();
+            });
+
+            $("#txtSearch").keyup(function (e) {
+                if (e.keyCode == 13) {
+                    $(this).trigger("enterKey");
+                }
+            });
+
+            $("#btnSearch").click(function () {
+                executeSearch();
+            });
+            //END: Event handlers
+
+
+            //BEGIN: Page initialization
+            loadAllLists();
+            //END: Page initialization
+
+
+            //BEGIN: Helper functions
+            function executeSearch()
+            {
+                selectedPageSize = $("#ddlPageSize").val();
+
+                if ($("#txtSearch").val().trim() == "") {
+                    //Refresh the lists with the updated page size
+                    loadAllLists();
+                } else {
+
+                    //Refresh the filtered lists with the updated page size
+                    loadAllFilteredLists();
+                }
+            }
+            
+            function loadAllLists() {
+                loadList("topstories.json", "#spanTopStories", selectedPageSize, false);
+                loadList("newstories.json", "#spanNewStories", selectedPageSize, false);
+                loadList("beststories.json", "#spanBestStories", selectedPageSize, false);
+            }
+
+            function loadAllFilteredLists() {
+                loadList("topstories.json", "#spanTopStories", 500, true);
+                loadList("newstories.json", "#spanNewStories", 500, true);
+                loadList("beststories.json", "#spanBestStories", 500, true);
+            }
+
+            function loadList(relativeUrl, displayContainerId, pageSize, useSearchMode) {
+
+                var loadMask = "<img src='http://i.stack.imgur.com/FhHRx.gif'/>";
+
+                $(displayContainerId).html(loadMask);
+
+                $.getJSON(getFullUrl(relativeUrl), function (json) {
+                    var requests = [];
+
+                    //Make sure that we don't go out of bounds
+                    var maxPageSize = pageSize <= json.length ? pageSize : json.length;
+
+                    for (var i = 0; i < maxPageSize; i++) {
+                        //Get the individual items from the list of IDs returned from the page level calls
+                        requests.push($.getJSON(getItemUrl(json[i])));
+                    }
+
+                    $.when.apply($, requests).done(function () {
+                        var resultList = [].slice.call(arguments);
+
+                        if (useSearchMode) {
+                            var searchText = $("#txtSearch").val();
+                            populateFilteredPage(resultList, displayContainerId, searchText);
+                        }
+                        else {
+                            populateDefaultPage(resultList, displayContainerId);
+                        }
+                    });
+                });
+            }
+
+            function populateDefaultPage(resultList, displayContainerId)
+            {
+                //Build up the ordered list with links to the stories
+                var list = resultList.map(function (arr) {
+                    var convertedTime = new Date(arr[0].time * 1000).toLocaleString();
+                    return "<li> " + convertedTime + " <a href='" + arr[0].url + "'>" + arr[0].title + "</a></li>";
+                });
+
+                var orderedList = "<ol>" + list.join("") + "</ol>";
+
+                $(displayContainerId).html(orderedList);
+            }
+
+            function populateFilteredPage(resultList, displayContainerId, searchText) {
+                var upperCaseSearchText = searchText.toUpperCase();
+
+                var matchingItemCount = 0;
+
+                //Build up the ordered list with links to stories that contain matching search text
+                var list = resultList.map(function (arr) {
+                    if (matchingItemCount == selectedPageSize) {
+                        return "";
+                    }
+
+                    if (arr[0].title.toUpperCase().includes(upperCaseSearchText)) {
+                        matchingItemCount++;
+
+                        var convertedTime = new Date(arr[0].time * 1000).toLocaleString();
+                        return "<li> " + convertedTime + " <a href='" + arr[0].url + "'>" + arr[0].title + "</a></li>";
+                    }
+
+                    return "";
+                });
+
+                var orderedList = "<ol>" + list.join("") + "</ol>";
+
+                $(displayContainerId).html(orderedList);
+            }
+
+            function getFullUrl(relativeUrl) {
+                /*
+                Example:
+                    Base URL: https://hacker-news.firebaseio.com/v0/
+                    Relative URL: newstories.json
+                    Result: https://hacker-news.firebaseio.com/v0/newstories.json
+                */
+                return apiBaseUrl + relativeUrl;
+            }
+
+            function getItemUrl(itemId) {
+                /*
+                Example:
+                    Base URL: https://hacker-news.firebaseio.com/v0/
+                    itemId: 123456
+                    Result: https://hacker-news.firebaseio.com/v0/item/123456.json
+                */
+                return apiBaseUrl + "item/" + itemId + ".json";
+            }
+            //END: Helper functions
+        });
+
+    </script>
+</head>
+<body style="padding-left:200px;padding-top:50px;padding-bottom:50px;">
+
+    <div>
+        <div style="font-weight:bold;margin:5px;display:inline-block;">           
+            Page Size
+            <select id="ddlPageSize">
+                <option value="10">10</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="500">500</option>
+            </select>
+        </div>
+        <div style="margin:5px;display:inline-block;">
+            <input id="txtSearch" type="search" />
+            <button id="btnSearch">Search</button>
+        </div>
+    </div>
+
+    <div style="margin:5px;">
+        <h2>Top Stories</h2>
+        <span id="spanTopStories"></span>
+    </div>
+
+    <div style="margin:5px;">
+        <h2>New Stories</h2>
+        <span id="spanNewStories"></span>
+    </div>
+
+    <div style="margin:5px;">
+        <h2>Best Stories</h2>
+        <span id="spanBestStories"></span>
+    </div>
+</body>
+</html>
